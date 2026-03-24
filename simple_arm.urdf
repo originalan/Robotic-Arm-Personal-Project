@@ -1,0 +1,49 @@
+<?xml version="1.0"?>
+<robot name="four_dof_arm">
+  <link name="base_link"/>
+
+  <joint name="base_joint" type="revolute">
+    <parent link="base_link"/>
+    <child link="shoulder_link"/>
+    <origin xyz="0 0 0.05395" rpy="0 0 0"/> <axis xyz="0 0 1"/> <limit lower="-1.57" upper="1.57"/> 
+  </joint>
+
+  <link name="shoulder_link"/>
+
+  <joint name="shoulder_joint" type="revolute">
+    <parent link="shoulder_link"/>
+    <child link="upper_arm"/>
+    <origin xyz="0 0 0.0165849" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/> <limit lower="-1.57" upper="1.57"/> <!--lower limit is arm facing directly to the right, zero is facing direclty up-->
+  </joint>
+
+  <link name="upper_arm"/>
+
+  <joint name="elbow_joint" type="revolute">
+    <parent link="upper_arm"/>
+    <child link="forearm"/>
+    <origin xyz="0 0 0.127" rpy="0 0 0"/> <axis xyz="0 1 0"/>
+    <limit lower="-0.785" upper="2.356"/> <!-- lower limit is 45 degrees downwards, the zero is facing directly up-->
+  </joint>
+
+  <link name="forearm"/>
+
+  <joint name="wrist_joint" type="fixed">
+    <parent link="forearm"/>
+    <child link="hand"/>
+    <origin xyz="0 0 0.10671" rpy="0 0 0"/> 
+    <!-- <axis xyz="1 0 0"/> wrist rotates initialize 0 to be claw flat, commented out for simplicity -->
+    <!-- <limit lower="0" upper="3.14"/> -->
+  </joint>
+
+  <link name="hand"/>
+
+  <joint name="claw_tip_joint" type="fixed">
+  <parent link="hand"/>
+  <child link="claw_target"/>
+  <origin xyz="0 0 0.0901" rpy="0 0 0"/> 
+  
+  </joint>
+
+  <link name="claw_target"/>
+</robot>
