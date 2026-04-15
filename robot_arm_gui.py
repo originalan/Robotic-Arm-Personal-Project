@@ -116,18 +116,22 @@ class RobotArmApp:
         # Status Box
         status_frame = ttk.LabelFrame(left_col, text="System Status", padding=10)
         status_frame.pack(fill=tk.X, pady=(0, 10))
-        self.status_var = tk.StringVar(value="System Ready")
+        status_container = ttk.Frame(status_frame, width=300, height=50) # 50px fits exactly 2-3 lines of text
+        status_container.pack_propagate(False) # This is the magic lock! Stops it from stretching.
+        status_container.pack()
 
+        self.status_var = tk.StringVar(value="System Ready")
+        
         self.status_label = ttk.Label(
-            status_frame, 
+            status_container,         # Put the label inside the rigid container
             textvariable=self.status_var, 
             style="Status.TLabel",
-            width=35,             # Hard-code the width to ~35 characters
-            anchor=tk.CENTER,     # Keep text horizontally centered
-            justify=tk.CENTER,    # Center-align the text if it drops to a second line
-            wraplength=300        # Wrap text at exactly 300 pixels
+            anchor=tk.CENTER,     
+            justify=tk.CENTER,    
+            wraplength=290            # Wrap just before it hits the 300px wall
         )
-        self.status_label.pack(pady=5)
+        # expand=True keeps the text perfectly centered vertically and horizontally inside the 50px box
+        self.status_label.pack(expand=True, fill=tk.BOTH)
 
         # Direct Input Box
         input_frame = ttk.LabelFrame(left_col, text="Direct Coordinates (inches)", padding=10)
