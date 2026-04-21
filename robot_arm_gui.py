@@ -18,7 +18,7 @@ INCH_TO_METERS = 0.0254
 TOLERANCE_INCHES = 0.5 
 GRIPPER_OPEN = 1
 GRIPPER_CLOSED = 0
-STEP_SIZE = 0.25
+STEP_SIZE = 0.2
 PLAYBACK_DELAY_MS = 1000
 ANIMATION_DELAY_MS = 1
 
@@ -26,7 +26,8 @@ class RobotArmApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Robotic Arm Control Studio")
-        self.root.geometry("1200x750")
+        # self.root.geometry("1200x800")
+        self.center_window()
         
         style = ttk.Style()
         if "clam" in style.theme_names():
@@ -64,12 +65,22 @@ class RobotArmApp:
         # --- BIND WINDOW CLOSE ---
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
 
+    def center_window(self, width=1200, height=800):
+        # get screen width and height
+        screen_width = self.root.winfo_screenwidth()
+        screen_height = self.root.winfo_screenheight()
+
+        # calculate position x and y coordinates
+        x = (screen_width/2) - (width/2)
+        y = (screen_height/2) - (height/2)
+        self.root.geometry('%dx%d+%d+%d' % (width, height, x, y))
+
     def connect_serial(self):
         try:
             self.ser = serial.Serial(PORT, BAUD, timeout=1)
             print("Waking up Arduino...")
             
-            # CRITICAL: Force Python to wait 2 seconds for the Arduino to finish rebooting
+            # Force Python to wait 2 seconds for the Arduino to finish rebooting
             time.sleep(2) 
             
             # Flush out any random junk data that happened during boot
@@ -83,7 +94,7 @@ class RobotArmApp:
                 if self.ser.in_waiting > 0:
                     msg = self.ser.readline().decode('utf-8').strip()
                     if msg == "READY":
-                        print("Arduino Handshake Complete!")
+                        print("Arduino Handshake Complete.")
                         return
                 time.sleep(0.1)
                 attempts += 1
@@ -91,7 +102,7 @@ class RobotArmApp:
             print("Warning: Handshake timed out. Trying to proceed anyway.")
             
         except Exception as e:
-            print(f"Serial Error: {e}. Running in Simulation Mode.")
+            print(f"Serial Error: {e}. \nRunning in Simulation Mode.")
             self.ser = None
 
     def build_ui(self):
@@ -117,7 +128,7 @@ class RobotArmApp:
         status_frame = ttk.LabelFrame(left_col, text="System Status", padding=10)
         status_frame.pack(fill=tk.X, pady=(0, 10))
         status_container = ttk.Frame(status_frame, width=300, height=50) # 50px fits exactly 2-3 lines of text
-        status_container.pack_propagate(False) # This is the magic lock! Stops it from stretching.
+        status_container.pack_propagate(False)
         status_container.pack()
 
         self.status_var = tk.StringVar(value="System Ready")
@@ -153,6 +164,20 @@ class RobotArmApp:
         ttk.Button(jog_frame, text="+Y (D)", width=8, command=lambda: self.jog(0, STEP_SIZE, 0)).grid(row=1, column=2, padx=2)
         ttk.Button(jog_frame, text="+Z (Up)", width=8, command=lambda: self.jog(0, 0, STEP_SIZE)).grid(row=0, column=3, padx=15, pady=2)
         ttk.Button(jog_frame, text="-Z (Dn)", width=8, command=lambda: self.jog(0, 0, -STEP_SIZE)).grid(row=1, column=3, padx=15)
+
+        # Settings Box
+        settings_frame = ttk.LabelFrame(left_col, text="Movement Settings", padding=10)
+        settings_frame.pack(fill=tk.X, pady=5)
+        
+        # A Tkinter boolean variable to store the True/False state of the switch
+        self.use_smoothing_var = tk.BooleanVar(value=True) 
+        
+        self.smooth_checkbox = ttk.Checkbutton(
+            settings_frame, 
+            text="Enable Smooth S-Curve Interpolation", 
+            variable=self.use_smoothing_var
+        )
+        self.smooth_checkbox.pack(anchor=tk.W)
 
         # Wrist Box
         wrist_frame = ttk.LabelFrame(left_col, text="Wrist Rotation (Q / E)", padding=10)
@@ -226,18 +251,18 @@ class RobotArmApp:
         finally:
             # 5. Safely close the UI without triggering the TclError crash
             try:
-                # Only attempt to destroy the window if it still physically exists
+                # Only attempt to destroy the window if it still exists
                 if self.root.winfo_exists():
                     self.root.destroy()
             except Exception:
-                pass # The window is already dead, which is exactly what we want!
+                pass # The window is already dead
 
     # --- SAFETY FUNCTIONS ---
     def trigger_estop(self, event=None):
         self.e_stop_active = True
         self.is_playing = False
         self.is_moving = False
-        self.status_var.set("E-STOP TRIGGERED! MOTORS HALTED.")
+        self.status_var.set("EMERGENCY-STOP TRIGGERED. MOTORS HALTED.")
         self.status_label.config(style="Estop.TLabel")
         self.btn_estop.config(state=tk.DISABLED, bg="#550000")
         self.btn_reset.config(state=tk.NORMAL)
@@ -258,7 +283,7 @@ class RobotArmApp:
             x, y, z = float(self.entry_x.get()), float(self.entry_y.get()), float(self.entry_z.get())
             self.move_arm_smooth(x, y, z, self.curr_w, self.curr_g)
         except ValueError:
-            self.status_var.set("Error: Invalid Number!")
+            self.status_var.set("Error: Invalid Number.")
 
     def jog(self, dx, dy, dz):
         if self.is_playing or self.is_moving or self.e_stop_active: return
@@ -310,11 +335,11 @@ class RobotArmApp:
     def save_waypoints_csv(self):
         """Opens a prompt to save the current waypoint sequence to a CSV file."""
         if self.is_playing or self.is_moving or self.e_stop_active:
-            self.status_var.set("Cannot save CSV while moving!")
+            self.status_var.set("Cannot save CSV while moving.")
             return
 
         if not self.waypoints:
-            self.status_var.set("No waypoints to save!")
+            self.status_var.set("No waypoints to save.")
             return
             
         # Open standard OS Save File dialog
@@ -339,7 +364,7 @@ class RobotArmApp:
                     
             self.status_var.set(f"Saved {len(self.waypoints)} waypoints to CSV.")
         except Exception as e:
-            self.status_var.set("Error saving CSV!")
+            self.status_var.set("Error saving CSV.")
             print(f"CSV Save Error: {e}")
 
     def load_waypoints_csv(self):
@@ -388,7 +413,7 @@ class RobotArmApp:
                         
             self.status_var.set(f"Loaded {len(self.waypoints)} waypoints from CSV.")
         except Exception as e:
-            self.status_var.set("Error loading CSV! Is the format correct?")
+            self.status_var.set("Error loading CSV. Is the format correct?")
             print(f"CSV Load Error: {e}")
 
     def clear_waypoints(self):
@@ -418,7 +443,7 @@ class RobotArmApp:
             self.move_arm_smooth(x, y, z, w, g, callback=self.on_waypoint_reached)
         else:
             self.is_playing = False
-            self.status_var.set("Sequence Complete!")
+            self.status_var.set("Sequence Complete.")
             self.wp_listbox.selection_clear(0, tk.END)
 
     def on_waypoint_reached(self):
@@ -432,26 +457,34 @@ class RobotArmApp:
             return
 
         # --- 1. PRE-FLIGHT REACHABILITY CHECK ---
-        # Test the final destination before making any moves
         target_m = [t_x * INCH_TO_METERS, t_y * INCH_TO_METERS, t_z * INCH_TO_METERS]
         joint_angles = self.my_chain.inverse_kinematics(target_m)
         computed_pos_m = self.my_chain.forward_kinematics(joint_angles)[:3, 3]
         error_in = np.linalg.norm(computed_pos_m - target_m) / INCH_TO_METERS
         
         if error_in > TOLERANCE_INCHES:
-            self.status_var.set(f"ABORTED: Target is UNREACHABLE! (Error: {error_in:.2f} in)")
+            self.status_var.set(f"ABORTED: Target is UNREACHABLE. \n(Error: {error_in:.2f} in)")
             
-            # Keep the arm exactly where it is, but draw the unreachable target in the 3D plot
+            # Keep the arm exactly where it is, but draw the unreachable target
             current_m = [self.curr_x * INCH_TO_METERS, self.curr_y * INCH_TO_METERS, self.curr_z * INCH_TO_METERS]
             current_angles = self.my_chain.inverse_kinematics(current_m)
             self.update_plot(current_angles, target_m, False)
             
-            # If this happened during sequence playback, cancel the playback
             self.is_playing = False
             self.wp_listbox.selection_clear(0, tk.END)
             return
 
-        # --- 2. PROCEED WITH TRAJECTORY GENERATION ---
+        # --- 2. CHECK THE SMOOTHING TOGGLE ---
+        # If the user unchecked the box, bypass the interpolation and jump instantly
+        if not self.use_smoothing_var.get():
+            self.status_var.set("Snapping directly to target...")
+            self.move_arm(t_x, t_y, t_z, t_w, t_g, update_visuals=True)
+            if callback:
+                # Use a tiny delay so the UI doesn't freeze during fast sequence playbacks
+                self.root.after(10, callback) 
+            return
+
+        # --- 3. PROCEED WITH S-CURVE TRAJECTORY GENERATION ---
         self.is_moving = True
         dist = np.sqrt((t_x - self.curr_x)**2 + (t_y - self.curr_y)**2 + (t_z - self.curr_z)**2)
         steps = max(10, int(dist * 15))
@@ -460,20 +493,16 @@ class RobotArmApp:
         if dist == 0 and w_dist > 0:
             steps = max(10, int(w_dist / 2))
 
-        # --- COSINE INTERPOLATION ---
-        # 1. Create a linear time array from 0.0 to 1.0
+        # Cosine Interpolation
         t = np.linspace(0, 1, steps)
-        
-        # 2. Warp the linear time into a smooth S-curve using cosine
         smooth_t = (1 - np.cos(t * np.pi)) / 2 
         
-        # 3. Apply the S-curve to the start and end coordinates
         xs = self.curr_x + (t_x - self.curr_x) * smooth_t
         ys = self.curr_y + (t_y - self.curr_y) * smooth_t
         zs = self.curr_z + (t_z - self.curr_z) * smooth_t
         ws = self.curr_w + (t_w - self.curr_w) * smooth_t
         
-        self.status_var.set(f"Gliding to Target ({steps} frames)...")
+        self.status_var.set(f"Gliding to Target \n({steps} interpolation frames)")
         self._animate_step(xs, ys, zs, ws, t_g, steps, 0, callback)
 
     def _animate_step(self, xs, ys, zs, ws, target_g, total_steps, step, callback):
@@ -525,24 +554,9 @@ class RobotArmApp:
                 self.ser.write(msg.encode())
         else:
             if update_visuals:
-                self.status_var.set(f"UNREACHABLE! Error: {error_in:.2f} in")
-
+                self.status_var.set(f"UNREACHABLE. Error: {error_in:.2f} in")
         if update_visuals:
             self.update_plot(joint_angles, target_m, reachable)
-
-    # def update_plot(self, angles, target, reachable):
-    #         self.ax.clear()
-    #         self.my_chain.plot(angles, self.ax, target=target)
-    #         formatter = ticker.FuncFormatter(lambda x, pos: f'{x / INCH_TO_METERS:.1f}')
-    #         self.ax.xaxis.set_major_formatter(formatter)
-    #         self.ax.yaxis.set_major_formatter(formatter)
-    #         self.ax.zaxis.set_major_formatter(formatter)
-    #         self.ax.set_xlabel('X (in)'); self.ax.set_ylabel('Y (in)'); self.ax.set_zlabel('Z (in)')
-    #         self.ax.set_title("REACHABLE" if reachable else "UNREACHABLE", color='green' if reachable else 'red')
-    #         limit = 15 * INCH_TO_METERS
-    #         self.ax.set_xlim(-limit, limit); self.ax.set_ylim(-limit, limit); self.ax.set_zlim(0, limit)
-    #         self.ax.set_box_aspect([1,1,1])
-    #         self.canvas.draw()
     
     def update_plot(self, angles, target, reachable):
         self.ax.clear()
